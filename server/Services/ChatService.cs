@@ -66,16 +66,19 @@ public class ChatService : IChatService
         });
     }
 
-    public async Task<object> CreateConversation(string? title)
+public async Task<object> CreateConversation(string? title, string? userId)
+{
+    var conversation = new Conversation
     {
-        var conversation = new Conversation
-        {
-            Title = title ?? "新對話"
-        };
-        _db.Conversations.Add(conversation);
-        await _db.SaveChangesAsync();
-        return new { conversation.Id, conversation.Title, conversation.CreatedAt };
-    }
+        Title = title ?? "新對話",
+        UserId = userId
+    };
+
+    _db.Conversations.Add(conversation);
+    await _db.SaveChangesAsync();
+
+    return new { conversation.Id, conversation.Title, conversation.CreatedAt };
+}
 
     public async Task<MessageResponseDto?> AddMessage(int conversationId, CreateMessageDto messageDto)
     {

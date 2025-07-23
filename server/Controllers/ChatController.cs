@@ -35,9 +35,9 @@ public class ChatController : ApiBaseController
     }
 
     [HttpPost("conversations")]
-    public async Task<IActionResult> CreateConversation([FromBody] string? title)
+    public async Task<IActionResult> CreateConversation([FromBody] CreateConversationDto dto)
     {
-        var result = await _chat.CreateConversation(title);
+        var result = await _chat.CreateConversation(dto.Title, dto.UserId);
         return Ok(result);
     }
 
