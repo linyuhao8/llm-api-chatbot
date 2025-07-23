@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Runtime.Serialization;
 
 namespace Chat.Models
 {
@@ -9,12 +10,18 @@ namespace Chat.Models
     // Assistant   AI 模型（像 GPT、Claude）生成的回應	       「我是 AI 助手，請問有什麼可以幫你？」
     // System      系統指令或角色設定，用來控制 AI 的行為與角色，不會顯示給使用者	「你是一位禮貌的翻譯機器人」
 
-    public enum RoleType
-    {
-        User,
-        Assistant,
-        System
-    }
+
+public enum RoleType
+{
+    [EnumMember(Value = "user")]
+    User,
+
+    [EnumMember(Value = "assistant")]
+    Assistant,
+
+    [EnumMember(Value = "system")]
+    System
+}
     public class Message
     {
         [Key]

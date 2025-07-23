@@ -6,6 +6,8 @@ using Deepseek.Dtos;
 using Api.Models;
 using Ai.Service;
 using Chat.Dtos;
+using System.Text.Json.Serialization;
+
 
 //建立一個名為 DeepSeekService 的類別，透過 HTTP 請求去呼叫 DeepSeek 的 Chat Completion API（類似 OpenAI ChatGPT API），並回傳模型的回答。
 
@@ -99,18 +101,26 @@ public class DeepSeekService : IAIService
     /// </summary>
     /// <param name="request">使用者請求物件</param>
     /// <returns>格式化的 HTTP 內容</returns>
-    private static StringContent CreateRequestContent(List<MessageDto> messages)
+private static StringContent CreateRequestContent(List<MessageDto> messages)
+{
+    var requestData = new
     {
-        var requestData = new
-        {
-            model = DefaultModel,
-            messages = messages.Select(m => new { role = m.Role, content = m.Content }),
-            temperature = DefaultTemperature
-        };
+        model = DefaultModel,
+        messages = messages.Select(m => new { role = m.Role, content = m.Content }),
+        temperature = DefaultTemperature
+    };
 
-        var json = JsonSerializer.Serialize(requestData);
-        return new StringContent(json, Encoding.UTF8, "application/json");
-    }
+    // ✅ 加上 enum 轉成小寫字串（符合 "user" 格式）
+    var options = new JsonSerializerOptions
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
+
+    var json = JsonSerializer.Serialize(requestData, options);
+
+    return new StringContent(json, Encoding.UTF8, "application/json");
+}
+
 
     /// <summary>
     /// 處理 API 回應並轉換為標準格式
