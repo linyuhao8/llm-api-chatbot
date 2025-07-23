@@ -1,6 +1,7 @@
 using Microsoft.OpenApi.Models;
 using Microsoft.EntityFrameworkCore;
-using ContosoPizza.Data;
+using System.Text.Json;
+using App.Data;
 using System.Text.Json.Serialization;
 using Ai.Service;
 
@@ -26,7 +27,11 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
-
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase; // 可選
+});
 //註冊資料庫
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -42,7 +47,7 @@ builder.Services.AddSwaggerGen(c =>
         Version = "v1"
     });
 });
-
+builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddHttpClient<IAIService, DeepSeekService>();
 builder.Services.AddSingleton<AIServiceFactory>();
 

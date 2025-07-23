@@ -1,16 +1,34 @@
 using Microsoft.EntityFrameworkCore;
-using ContosoPizza.Models;
+using Chat.Models;
 
-namespace ContosoPizza.Data;
+namespace App.Data;
+
 public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options) { }
 
-    // 告訴 EF Core：「我有一張資料表叫做 Pizzas，這張表的每一列（row）對應到一個 Pizza 類別的物件。」
-    // Pizza 是一個 model class（你的程式中的資料結構）
-    // DbSet<Pizza> 是一組可以操作的資料列（CRUD）
-    // Pizzas 是你在程式中操作的集合名稱（通常是資料表名稱的複數Table name）
+    public DbSet<Conversation> Conversations { get; set; }
 
-    public DbSet<Pizza> Pizzas { get; set; }
+    public DbSet<Message> Messages { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // 設定 Conversation 和 Message 的一對多關聯
+        modelBuilder.Entity<Conversation>()
+            .HasMany(c => c.Messages)                      // Conversation 有很多 Messages
+            .WithOne(m => m.Conversation)                  // 每個 Message 對應一個 Conversation
+            .HasForeignKey(m => m.ConversationId)          // Message 使用 ConversationId 當外鍵
+            .OnDelete(DeleteBehavior.Cascade);             // 若刪除某個 Conversation，相關的 Messages 也會一併刪除（連鎖刪除）
+
+        // 設定 Message 中 Role 欄位的儲存格式
+        modelBuilder.Entity<Message>()
+            .Property(m => m.Role)
+            .HasConversion<string>()                       // 將 enum RoleType 以字串方式存入資料庫（預設是 int）
+            .HasMaxLength(50);                             // 設定資料庫中 Role 欄位的最大長度為 50 字元
+    }
+
 }
+

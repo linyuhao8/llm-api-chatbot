@@ -5,7 +5,6 @@ using Ai.Service; // IAIService 與 AIServiceFactory 的命名空間
 // 標記此類別是 API Controller，會自動處理 Model 驗證錯誤與 JSON 格式的輸入/輸出
 [ApiController]
 
-
 // 設定路由規則：api/deepseek/ai（[controller] 會取用類別名稱 AiController 的 "Ai"）
 [Route("api/[controller]")]
 public class AiController : ControllerBase
@@ -21,9 +20,21 @@ public class AiController : ControllerBase
     [HttpPost("ask")]
     public async Task<IActionResult> Ask([FromBody] AskRequest request)
     {
+        // var conversationId = request.ConversationId;
+
+        // if (conversationId == null)
+        // {
+        //     // 沒有傳 ConversationId，建立新的對話
+        //     var conversation = await _chat.CreateConversation("新對話");
+        //     conversationId = conversation.Id;
+        // }
+
+        // // 呼叫 ChatService 的 AskAndSaveAsync（儲存使用者訊息 + 呼叫 AI + 儲存 AI 回覆）
+        // var result = await _chat.AskAndSaveAsync(conversationId.Value, request.Messages, provider);
         var service = _factory.GetService(request.Provider.ToString());
-        var result = await service.AskAsync(request.Prompt);
+        var result = await service.AskAsync(request.Messages);
+        if (!result.Success)
+            return BadRequest(result);
         return Ok(result);
     }
-
 }

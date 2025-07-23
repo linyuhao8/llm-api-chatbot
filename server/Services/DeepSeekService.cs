@@ -1,9 +1,11 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+//Deepseek回應格式
 using Deepseek.Dtos;
 using Api.Models;
 using Ai.Service;
+using Chat.Dtos;
 
 //建立一個名為 DeepSeekService 的類別，透過 HTTP 請求去呼叫 DeepSeek 的 Chat Completion API（類似 OpenAI ChatGPT API），並回傳模型的回答。
 
@@ -49,7 +51,7 @@ public class DeepSeekService : IAIService
     /// </summary>
     /// <param name="request">包含問題內容的請求物件</param>
     /// <returns>包含 API 回應的結果物件</returns>
-    public async Task<ApiResponse<DeepSeekResponseDto>> AskAsync(string prompt)
+    public async Task<ApiResponse<DeepSeekResponseDto>> AskAsync(List<MessageDto> messages)
     {
 
         try
@@ -58,7 +60,7 @@ public class DeepSeekService : IAIService
             SetAuthorizationHeader();
 
             // 建立請求內容
-            var content = CreateRequestContent(prompt);
+            var content = CreateRequestContent(messages);
 
             // 發送 API 請求
             var response = await _httpClient.PostAsync(ApiUrl, content);
@@ -97,15 +99,12 @@ public class DeepSeekService : IAIService
     /// </summary>
     /// <param name="request">使用者請求物件</param>
     /// <returns>格式化的 HTTP 內容</returns>
-    private static StringContent CreateRequestContent(string prompt)
+    private static StringContent CreateRequestContent(List<MessageDto> messages)
     {
         var requestData = new
         {
             model = DefaultModel,
-            messages = new[]
-            {
-                new { role = "user", content = prompt }
-            },
+            messages = messages.Select(m => new { role = m.Role, content = m.Content }),
             temperature = DefaultTemperature
         };
 
@@ -174,6 +173,8 @@ public class DeepSeekService : IAIService
             return CreateErrorResponse($"無法解析 API 回應: {ex.Message}");
         }
     }
+
+
 
     /// <summary>
     /// 建立錯誤回應的輔助方法
