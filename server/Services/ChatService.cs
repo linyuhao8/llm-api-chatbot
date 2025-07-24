@@ -6,6 +6,7 @@ using Api.Models;
 using DbMessage = Chat.Models.Message;
 using Deepseek.Dtos;
 using DeepseekMessage = Deepseek.Dtos.Message;
+using Api.Common;
 
 public class ChatService : IChatService
 {
@@ -44,7 +45,12 @@ public class ChatService : IChatService
             .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
 
-        return conversations.Select(c => new { c.Id, c.Title, c.CreatedAt });
+        return conversations.Select(c => new ConversationResponseDto
+        {
+            Id = c.Id,
+            Title = c.Title ?? string.Empty,
+            CreatedAt = c.CreatedAt
+        });
     }
 
     public async Task<IEnumerable<object>> GetAllConversations()
@@ -66,19 +72,24 @@ public class ChatService : IChatService
         });
     }
 
-public async Task<object> CreateConversation(string? title, string? userId)
-{
-    var conversation = new Conversation
+    public async Task<object> CreateConversation(string? title, string? userId)
     {
-        Title = title ?? "新對話",
-        UserId = userId
-    };
+        var conversation = new Conversation
+        {
+            Title = title ?? "新對話",
+            UserId = userId
+        };
 
-    _db.Conversations.Add(conversation);
-    await _db.SaveChangesAsync();
+        _db.Conversations.Add(conversation);
+        await _db.SaveChangesAsync();
 
-    return new { conversation.Id, conversation.Title, conversation.CreatedAt };
-}
+        return new ConversationResponseDto
+        {
+            Id = conversation.Id,
+            Title = conversation.Title ?? string.Empty,
+            CreatedAt = conversation.CreatedAt
+        };
+    }
 
     public async Task<MessageResponseDto?> AddMessage(int conversationId, CreateMessageDto messageDto)
     {
@@ -104,25 +115,24 @@ public async Task<object> CreateConversation(string? title, string? userId)
     }
 
 
-    public async Task<DeepSeekResponseDto?> AskAndSaveAsync(int conversationId, List<MessageDto> messages, string provider)
+    public async Task<ApiResponse<DeepSeekResponseDto>> AskAndSaveAsync(int conversationId, List<MessageDto> messages, string provider)
     {
-        // 取得使用者最新訊息
         var lastUserMessage = messages.LastOrDefault(m => m.Role == RoleType.User);
-        if (lastUserMessage == null) return null;
+        if (lastUserMessage == null)
+            return ApiResponse<DeepSeekResponseDto>.Fail("找不到使用者訊息", ErrorCodes.MessageNotFound);
 
         var aiService = _factory.GetService(provider);
         var aiResponse = await aiService.AskAsync(messages);
 
-        if (!aiResponse.Success || aiResponse.Data == null) return null;
+        if (!aiResponse.Success || aiResponse.Data == null)
+            return ApiResponse<DeepSeekResponseDto>.Fail("AI 服務回應失敗", ErrorCodes.AiServiceError);
 
-        // 儲存使用者訊息
         await AddMessage(conversationId, new CreateMessageDto
         {
             Role = RoleType.User,
             Content = lastUserMessage.Content
         });
 
-        // 儲存 AI 回覆訊息
         var aiContent = aiResponse.Data.Choices.FirstOrDefault()?.Message.Content;
         if (!string.IsNullOrWhiteSpace(aiContent))
         {
@@ -133,8 +143,9 @@ public async Task<object> CreateConversation(string? title, string? userId)
             });
         }
 
-        return aiResponse.Data;
+        return ApiResponse<DeepSeekResponseDto>.Ok(aiResponse.Data);
     }
+
 
 
 

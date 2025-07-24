@@ -7,6 +7,7 @@ using Api.Models;
 using Ai.Service;
 using Chat.Dtos;
 using System.Text.Json.Serialization;
+using Api.Common;
 
 
 //建立一個名為 DeepSeekService 的類別，透過 HTTP 請求去呼叫 DeepSeek 的 Chat Completion API（類似 OpenAI ChatGPT API），並回傳模型的回答。
@@ -101,25 +102,25 @@ public class DeepSeekService : IAIService
     /// </summary>
     /// <param name="request">使用者請求物件</param>
     /// <returns>格式化的 HTTP 內容</returns>
-private static StringContent CreateRequestContent(List<MessageDto> messages)
-{
-    var requestData = new
+    private static StringContent CreateRequestContent(List<MessageDto> messages)
     {
-        model = DefaultModel,
-        messages = messages.Select(m => new { role = m.Role, content = m.Content }),
-        temperature = DefaultTemperature
-    };
+        var requestData = new
+        {
+            model = DefaultModel,
+            messages = messages.Select(m => new { role = m.Role, content = m.Content }),
+            temperature = DefaultTemperature
+        };
 
-    // ✅ 加上 enum 轉成小寫字串（符合 "user" 格式）
-    var options = new JsonSerializerOptions
-    {
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
+        // ✅ 加上 enum 轉成小寫字串（符合 "user" 格式）
+        var options = new JsonSerializerOptions
+        {
+            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        };
 
-    var json = JsonSerializer.Serialize(requestData, options);
+        var json = JsonSerializer.Serialize(requestData, options);
 
-    return new StringContent(json, Encoding.UTF8, "application/json");
-}
+        return new StringContent(json, Encoding.UTF8, "application/json");
+    }
 
 
     /// <summary>
@@ -153,11 +154,21 @@ private static StringContent CreateRequestContent(List<MessageDto> messages)
         try
         {
             var errorDto = JsonSerializer.Deserialize<DeepSeekErrorDto>(json, options);
-            return CreateErrorResponse(errorDto?.Error?.Message ?? "API 回傳未知錯誤");
+            var message = errorDto?.Error?.Message ?? "API 回傳未知錯誤";
+
+            return CreateErrorResponse(
+                message,
+                ErrorCodes.AiServiceError, // 錯誤代碼統一管理
+                json // 原始錯誤內容
+            );
         }
         catch
         {
-            return CreateErrorResponse($"無法解析錯誤回應: {json}");
+            return CreateErrorResponse(
+                $"無法解析錯誤回應: {json}",
+                ErrorCodes.AiServiceParseError,
+                json
+            );
         }
     }
 
@@ -180,10 +191,13 @@ private static StringContent CreateRequestContent(List<MessageDto> messages)
         }
         catch (JsonException ex)
         {
-            return CreateErrorResponse($"無法解析 API 回應: {ex.Message}");
+            return CreateErrorResponse(
+                "API 回傳格式錯誤",
+                ErrorCodes.AiServiceParseError,
+                ex.Message
+            );
         }
     }
-
 
 
     /// <summary>
@@ -191,12 +205,14 @@ private static StringContent CreateRequestContent(List<MessageDto> messages)
     /// </summary>
     /// <param name="errorMessage">錯誤訊息</param>
     /// <returns>標準化的錯誤回應</returns>
-    private static ApiResponse<DeepSeekResponseDto> CreateErrorResponse(string errorMessage)
+    private static ApiResponse<DeepSeekResponseDto> CreateErrorResponse(string errorMessage, int? errorCode = null, string? detail = null)
     {
         return new ApiResponse<DeepSeekResponseDto>
         {
             Success = false,
-            ErrorMessage = errorMessage
+            ErrorMessage = errorMessage,
+            ErrorCode = errorCode,
+            ErrorDetail = detail
         };
     }
 
