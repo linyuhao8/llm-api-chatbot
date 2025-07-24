@@ -4,8 +4,8 @@
       <!-- 側邊欄 -->
       <div class="sidebar" :class="{ 'mobile-hidden': !showSidebar }">
         <div class="sidebar-header">
-          <!-- 下方btn@click="createNewChat" -->
-          <button class="new-chat-btn">
+          <!-- 下方btn -->
+          <button class="new-chat-btn" @click="createNewChat">
             <span>+</span>
             新對話
           </button>
@@ -22,7 +22,7 @@
             <!-- 上方btn @click="loadChat(chat.id)" -->
             <div class="chat-item-content">
               <div class="chat-item-title">{{ chat.title }}</div>
-              <div class="chat-item-preview">{{ chat.preview }}</div>
+              <!-- <div class="chat-item-preview">{{ chat.preview }}</div> -->
             </div>
             <div class="chat-item-actions">
               <!-- 下方btn @click.stop="deleteChat(chat.id)" -->
@@ -131,20 +131,20 @@
           </div>
         </div>
 
-        <!-- <div class="chat-input">
+        <div class="chat-input">
           <div class="input-container">
             <div class="input-wrapper">
+              <!-- @keydown="handleKeyDown" -->
               <textarea
                 v-model="newMessage"
-                @keydown="handleKeyDown"
                 @input="autoResize"
                 placeholder="輸入訊息..."
                 class="message-input"
                 ref="messageInput"
                 :disabled="isTyping"
               ></textarea>
+              <!-- @click="sendMessage" -->
               <button
-                @click="sendMessage"
                 :disabled="!newMessage.trim() || isTyping"
                 class="send-button"
               >
@@ -153,12 +153,11 @@
             </div>
             <div class="controls">
               <div class="char-count">{{ newMessage.length }}/2000</div>
-              <button @click="clearMessages" class="clear-button">
-                清除對話
-              </button>
+              <!-- //@click="clearMessages" -->
+              <button class="clear-button">清除對話</button>
             </div>
           </div>
-        </div> -->
+        </div>
       </div>
     </div>
   </div>
@@ -168,6 +167,10 @@
 import "~/assets/chatbot.css";
 import { ref, reactive, onMounted, nextTick } from "vue";
 import type { ChatResponse, ChatSummary } from "~/types/chat";
+import type { ApiResponse } from "~/types/api-response";
+import type { Conversation } from "~/types/conversation";
+import { useRoute } from "vue-router";
+const route = useRoute();
 
 const fakeChatRes: ChatResponse = {
   success: true,
@@ -303,35 +306,46 @@ const db = new MockDatabase();
 const messages = ref<any[]>([]);
 const newMessage = ref("");
 const isTyping = ref(false);
-const chatHistory = ref<ChatSummary[]>([]);
+const chatHistory = ref<Conversation[]>([]);
 const currentChatId = ref<number | null>(null);
 const currentChatTitle = ref("ChatGPT");
 const loadingChats = ref(false);
 const showSidebar = ref(false);
+const userId = ref<number>(1);
+const fetchKey = ref(Date.now());
 
 const messageInput = ref<HTMLTextAreaElement | null>(null);
 const messagesContainer = ref<HTMLDivElement | null>(null);
 
 // --- 生命周期 ---
 onMounted(async () => {
+  console.log("onMounted 觸發");
   if (window.innerWidth > 768) showSidebar.value = true;
   await loadChatHistory();
+  console.log("loadChatHistory 執行完");
   messageInput.value?.focus();
 });
-
 // --- 方法定義 ---
 async function loadChatHistory() {
+  if (!userId.value) return;
+
   loadingChats.value = true;
 
-  const res = await fetch("http://localhost:5208/api/Chat/conversations");
-  const data = await res.json();
-  console.log("✅ 原始 fetch 成功:", data);
-  if (data.value) {
-    chatHistory.value = data.value;
+  try {
+    const res = await fetch(
+      `http://localhost:5208/api/Chat/users/${userId.value}/conversations`
+    );
+    const json = await res.json();
+    if (json.success) {
+      chatHistory.value = json.data ?? [];
+    } else {
+      console.warn("API 回傳錯誤:", json.errorMessage);
+    }
+  } catch (err) {
+    console.error("網路或伺服器錯誤:", err);
+  } finally {
+    loadingChats.value = false;
   }
-  console.log(1, chatHistory.value);
-
-  loadingChats.value = false;
 }
 
 // async function loadChat(chatId: number) {
@@ -351,20 +365,42 @@ async function loadChatHistory() {
 //   }
 // }
 
-// async function createNewChat() {
-//   try {
-//     const newChat = await db.createChat();
-//     chatHistory.value.unshift(newChat);
-//     currentChatId.value = newChat.id;
-//     currentChatTitle.value = newChat.title;
-//     messages.value = [];
+async function createNewChat() {
+  try {
+    const res = await fetch("http://localhost:5208/api/Chat/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "*/*",
+      },
+      body: JSON.stringify({
+        userId: "1",
+      }),
+    });
 
-//     if (window.innerWidth <= 768) showSidebar.value = false;
-//     messageInput.value?.focus();
-//   } catch (err) {
-//     console.error("創建新聊天失敗:", err);
-//   }
-// }
+    const json: ApiResponse<Conversation> = await res.json();
+
+    if (!json.success) {
+      throw new Error(
+        `HTTP 錯誤碼: ${res.status}, ${json.errorMessage ?? "API 回傳失敗"}`
+      );
+    }
+
+    // ✅ 更新 UI 與狀態
+    await loadChatHistory();
+
+    currentChatId.value = json.data!.id;
+    currentChatTitle.value = json.data!.title;
+    messages.value = [];
+
+    if (window.innerWidth <= 768) showSidebar.value = false;
+    messageInput.value?.focus();
+  } catch (err) {
+    console.error("❌ 創建新聊天失敗:", err);
+    // ❗️你也可以加上 toast 或 alert
+    // toast.error("創建新聊天失敗，請稍後再試");
+  }
+}
 
 // async function deleteChat(chatId: number) {
 //   if (!confirm("確定要刪除這個對話嗎？")) return;
