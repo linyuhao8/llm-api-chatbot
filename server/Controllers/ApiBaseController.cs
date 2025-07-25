@@ -50,15 +50,9 @@ namespace Api.Controllers
         /// </summary>
         protected IActionResult FromApiResponse<T>(ApiResponse<T> response)
         {
-            if (response.Success)
-                return Ok(ApiResponse<T>.Ok(response.Data!));
-
-            return Ok(ApiResponse<T>.Fail(
-                response.ErrorMessage ?? "未知錯誤",
-                response.ErrorCode,
-                response.ErrorDetail
-            ));
+            return Ok(response);
         }
+
     }
 
 
