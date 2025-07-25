@@ -56,10 +56,7 @@ public class ChatController : ApiBaseController
     public async Task<IActionResult> AskAndSaveAsync(int conversationId, [FromBody] List<MessageDto> messages, [FromQuery] string provider = "DeepSeek")
     {
         var result = await _chat.AskAndSaveAsync(conversationId, messages, provider);
-        if (result == null)
-            return Fail("AI 回應失敗或找不到使用者訊息");
-        else
-            return Success(result);
+        return FromApiResponse(result);
     }
 
 }

@@ -8,6 +8,6 @@ public interface IChatService
     Task<object> CreateConversation(string? title, string? userId);
     Task<MessageResponseDto?> AddMessage(int conversationId, CreateMessageDto messageDto);
 
-    Task<ApiResponse<DeepSeekResponseDto>> AskAndSaveAsync(int conversationId, List<MessageDto> messages, string provider);
+    Task<ApiResponse<AskResultDto>> AskAndSaveAsync(int conversationId, List<MessageDto> messages, string provider);
 
 }

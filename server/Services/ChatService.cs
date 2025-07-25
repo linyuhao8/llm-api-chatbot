@@ -42,6 +42,7 @@ public class ChatService : IChatService
     {
         var conversations = await _db.Conversations
             .Where(c => c.UserId == userId)
+            .Include(c => c.Messages.OrderByDescending(m => m.CreatedAt))
             .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
 
@@ -49,7 +50,8 @@ public class ChatService : IChatService
         {
             Id = c.Id,
             Title = c.Title ?? string.Empty,
-            CreatedAt = c.CreatedAt
+            CreatedAt = c.CreatedAt,
+            Preview = c.Messages.FirstOrDefault()?.Content
         });
     }
 
@@ -115,36 +117,48 @@ public class ChatService : IChatService
     }
 
 
-    public async Task<ApiResponse<DeepSeekResponseDto>> AskAndSaveAsync(int conversationId, List<MessageDto> messages, string provider)
+    public async Task<ApiResponse<AskResultDto>> AskAndSaveAsync(int conversationId, List<MessageDto> messages, string provider)
     {
         var lastUserMessage = messages.LastOrDefault(m => m.Role == RoleType.User);
         if (lastUserMessage == null)
-            return ApiResponse<DeepSeekResponseDto>.Fail("找不到使用者訊息", ErrorCodes.MessageNotFound);
+            return ApiResponse<AskResultDto>.Fail("找不到使用者訊息", ErrorCodes.MessageNotFound);
 
         var aiService = _factory.GetService(provider);
         var aiResponse = await aiService.AskAsync(messages);
 
         if (!aiResponse.Success || aiResponse.Data == null)
-            return ApiResponse<DeepSeekResponseDto>.Fail("AI 服務回應失敗", ErrorCodes.AiServiceError);
+            return ApiResponse<AskResultDto>.Fail("AI 服務回應失敗", ErrorCodes.AiServiceError);
 
-        await AddMessage(conversationId, new CreateMessageDto
+        var userMessage = await AddMessage(conversationId, new CreateMessageDto
         {
             Role = RoleType.User,
             Content = lastUserMessage.Content
         });
+        int userMessageId = userMessage!.Id;
 
+
+        int? aiMessageId = null;
         var aiContent = aiResponse.Data.Choices.FirstOrDefault()?.Message.Content;
         if (!string.IsNullOrWhiteSpace(aiContent))
         {
-            await AddMessage(conversationId, new CreateMessageDto
+            var aiMessage = await AddMessage(conversationId, new CreateMessageDto
             {
                 Role = RoleType.Assistant,
                 Content = aiContent
             });
+            aiMessageId = aiMessage?.Id;
         }
 
-        return ApiResponse<DeepSeekResponseDto>.Ok(aiResponse.Data);
+        var result = new AskResultDto
+        {
+            AiResponse = aiResponse.Data,
+            UserMessageId = userMessageId,
+            AiMessageId = aiMessageId
+        };
+
+        return ApiResponse<AskResultDto>.Ok(result);
     }
+
 
 
 
