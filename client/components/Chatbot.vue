@@ -20,7 +20,6 @@
             :class="['chat-item', { active: chat.id === currentChatId }]"
             @click="loadChat(chat.id)"
           >
-            <!-- 上方btn @click="loadChat(chat.id)" -->
             <div class="chat-item-content">
               <div class="chat-item-title">{{ chat.title }}</div>
               <div class="chat-item-preview">{{ chat.preview }}</div>
@@ -64,7 +63,7 @@
               我是一個 AI
               助手，可以回答問題、協助寫作、解決問題等。請問我能為您做些什麼？
             </p>
-            <!-- <div class="suggestion-grid">
+            <div class="suggestion-grid">
               <div
                 class="suggestion-card"
                 @click="sendSuggestion('解釋量子物理的基本概念')"
@@ -93,7 +92,7 @@
                 <h3>📚 規劃學習</h3>
                 <p>幫我制定學習和成長計劃</p>
               </div>
-            </div> -->
+            </div>
           </div>
 
           <div
@@ -105,15 +104,16 @@
               <div class="message-avatar">
                 {{ message.role === "User" ? "User" : "AI" }}
               </div>
-              <div class="message-content">
+
+              <div class="message-content prose dark:prose-invert max-w-none">
                 <div v-if="message.role === 'Assistant' && message.isTyping">
-                  {{ message.displayText
-                  }}<span
+                  <div v-html="render(message.displayText)" />
+                  <span
                     v-if="message.displayText !== message.content"
                     class="typing-cursor"
                   ></span>
                 </div>
-                <div v-else>{{ message.content }}</div>
+                <div v-else v-html="render(message.content)" />
               </div>
             </div>
           </div>
@@ -154,8 +154,6 @@
             </div>
             <div class="controls">
               <div class="char-count">{{ newMessage.length }}/2000</div>
-              <!-- //@click="clearMessages" -->
-              <button class="clear-button">清除對話</button>
             </div>
           </div>
         </div>
@@ -167,157 +165,37 @@
 <script setup lang="ts">
 import "~/assets/chatbot.css";
 import { ref, onMounted, nextTick } from "vue";
-import type { ChatResponse } from "~/types/chat";
-import type { ApiResponse, AskResultData } from "~/types/api-response";
 import type { Conversation } from "~/types/conversation";
-import type { DeepSeekResponse } from "~/types/DeepSeekRespones";
-import { useRoute } from "vue-router";
-const route = useRoute();
-
-const fakeChatRes: ChatResponse = {
-  success: true,
-  data: {
-    id: "531f26a7-7292-4629-a5cc-40b5d4998147",
-    object: "chat.completion",
-    created: 1753071963,
-    model: "deepseek-chat",
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: "assistant",
-          content:
-            "你好呀！😊 很高兴见到你～今天有什么想聊的或者需要帮忙的吗？无论是闲聊、问题解答还是随便聊聊日常，我都在这里哦！✨",
-        },
-        logprobs: null,
-        finish_reason: "stop",
-      },
-    ],
-    usage: {
-      prompt_tokens: 5,
-      completion_tokens: 36,
-      total_tokens: 41,
-      prompt_tokens_details: {
-        cached_tokens: 0,
-      },
-      prompt_cache_hit_tokens: 0,
-      prompt_cache_miss_tokens: 5,
-    },
-    system_fingerprint: "fp_8802369eaa_prod0623_fp8_kvcache",
-  },
-  errorMessage: null,
-};
-
-// --- 模擬資料庫 ---
-class MockDatabase {
-  chats: any[];
-  nextChatId: number;
-  nextMessageId: number;
-
-  constructor() {
-    this.chats = [
-      {
-        id: 1,
-        title: "量子物理基礎",
-        preview: "解釋量子物理的基本概念...",
-        createdAt: new Date(2024, 0, 15),
-        messages: [
-          {
-            id: 1,
-            type: "user",
-            text: "解釋量子物理的基本概念",
-            timestamp: "14:30",
-          },
-          {
-            id: 2,
-            type: "assistant",
-            text: "量子物理是現代物理學的重要分支...",
-            timestamp: "14:31",
-          },
-        ],
-      },
-      // 其餘略...
-    ];
-    this.nextChatId = 5;
-    this.nextMessageId = 9;
-  }
-
-  async delay(ms = 300) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async getChats() {
-    await this.delay();
-    return [...this.chats]
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .reverse();
-  }
-
-  async getChat(chatId: number) {
-    await this.delay();
-    return this.chats.find((chat) => chat.id === chatId);
-  }
-
-  async createChat(title = "新對話") {
-    await this.delay();
-    const newChat = {
-      id: this.nextChatId++,
-      title,
-      preview: "",
-      createdAt: new Date(),
-      messages: [],
-    };
-    this.chats.push(newChat);
-    return newChat;
-  }
-
-  async saveMessage(chatId: number, message: any) {
-    await this.delay(100);
-    const chat = this.chats.find((c) => c.id === chatId);
-    if (chat) {
-      message.id = this.nextMessageId++;
-      chat.messages.push(message);
-
-      if (message.type === "user" && !chat.preview) {
-        chat.preview = message.text.substring(0, 30) + "...";
-      }
-
-      if (chat.title === "新對話" && message.type === "user") {
-        chat.title =
-          message.text.substring(0, 20) +
-          (message.text.length > 20 ? "..." : "");
-      }
-    }
-    return message;
-  }
-
-  async deleteChat(chatId: number) {
-    await this.delay();
-    const index = this.chats.findIndex((chat) => chat.id === chatId);
-    if (index > -1) {
-      this.chats.splice(index, 1);
-      return true;
-    }
-    return false;
-  }
-}
-
-// --- 狀態與參照變數 ---
-const db = new MockDatabase();
+import {
+  fetchChatHistory,
+  fetchMessages,
+  createConversation,
+  askAI,
+} from "~/composables/useChatApi";
+import { useMarkdown } from "~/composables/useMarkdown";
+const { render } = useMarkdown();
 
 const messages = ref<any[]>([]);
 const newMessage = ref("");
 const isTyping = ref(false);
 const chatHistory = ref<Conversation[]>([]);
 const currentChatId = ref<number | null>(null);
-const currentChatTitle = ref("ChatGPT");
+const currentChatTitle = ref("Deepseek");
 const loadingChats = ref(false);
 const showSidebar = ref(false);
-const userId = ref<number>(1);
-const fetchKey = ref(Date.now());
+const userId = ref<string>("1");
 
 const messageInput = ref<HTMLTextAreaElement | null>(null);
 const messagesContainer = ref<HTMLDivElement | null>(null);
+
+//for input
+watch(newMessage, (newVal, oldVal) => {
+  console.log("newMessage changed:", oldVal, "→", newVal);
+});
+
+watch(messages, (newVal, oldVal) => {
+  console.log("messages updated. Total messages:", newVal);
+});
 
 // --- 生命周期 ---
 onMounted(async () => {
@@ -328,26 +206,13 @@ onMounted(async () => {
   messageInput.value?.focus();
 });
 
-watch(messages, (newVal, oldVal) => {
-  console.log("🟡 messages updated:", newVal);
-});
-
 // --- 方法定義 ---
 async function loadChatHistory() {
   if (!userId.value) return;
-
   loadingChats.value = true;
-
   try {
-    const res = await fetch(
-      `http://localhost:5208/api/Chat/users/${userId.value}/conversations`
-    );
-    const json = await res.json();
-    if (json.success) {
-      chatHistory.value = json.data ?? [];
-    } else {
-      console.warn("API 回傳錯誤:", json.errorMessage);
-    }
+    const history = await fetchChatHistory(userId.value);
+    if (history.success) return (chatHistory.value = history.data ?? []);
   } catch (err) {
     console.error("網路或伺服器錯誤:", err);
   } finally {
@@ -357,16 +222,11 @@ async function loadChatHistory() {
 
 async function loadChat(conversationId: number) {
   try {
-    const res = await fetch(
-      `http://localhost:5208/api/Chat/conversations/${conversationId}/messages`
-    );
-
-    const json = await res.json();
-
-    if (json.success && json.data) {
-      currentChatId.value = json.data.id;
-      currentChatTitle.value = json.data.title;
-      messages.value = json.data.messages;
+    const messageRes = await fetchMessages(conversationId);
+    if (messageRes.success && messageRes.data) {
+      currentChatId.value = messageRes.data.id;
+      currentChatTitle.value = messageRes.data.title;
+      messages.value = messageRes.data.messages;
 
       if (window.innerWidth <= 768) showSidebar.value = false;
 
@@ -379,37 +239,26 @@ async function loadChat(conversationId: number) {
 
 async function createNewChat() {
   try {
-    const res = await fetch("http://localhost:5208/api/Chat/conversations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        accept: "*/*",
-      },
-      body: JSON.stringify({
-        userId: "1",
-      }),
-    });
-
-    const json: ApiResponse<Conversation> = await res.json();
-
-    if (!json.success) {
+    const newChat = await createConversation(userId.value);
+    if (!newChat.success) {
       throw new Error(
-        `HTTP 錯誤碼: ${res.status}, ${json.errorMessage ?? "API 回傳失敗"}`
+        `HTTP 錯誤碼: ${newChat.errorCode}, ${
+          newChat.errorMessage ?? "API 回傳失敗"
+        }`
       );
     }
 
     // ✅ 更新 UI 與狀態
     await loadChatHistory();
 
-    currentChatId.value = json.data!.id;
-    currentChatTitle.value = json.data!.title;
+    currentChatId.value = newChat.data!.id;
+    currentChatTitle.value = newChat.data!.title;
     messages.value = [];
 
     if (window.innerWidth <= 768) showSidebar.value = false;
     messageInput.value?.focus();
   } catch (err) {
     console.error("❌ 創建新聊天失敗:", err);
-    // ❗️你也可以加上 toast 或 alert
     // toast.error("創建新聊天失敗，請稍後再試");
   }
 }
@@ -445,27 +294,16 @@ async function sendMessage() {
 
   // ✅ 組合使用者訊息
   const userMessage = {
-    role: "user", // 注意大小寫需符合後端 enum，否則可能失敗
+    role: "user",
     content: content,
   };
 
   try {
-    const res = await fetch(
-      `http://localhost:5208/api/Chat/${currentChatId.value}/ask?provider=DeepSeek`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          accept: "*/*",
-        },
-        body: JSON.stringify([userMessage]),
-      }
-    );
+    const reply = await askAI(currentChatId.value!, [userMessage]);
 
-    const json: ApiResponse<AskResultData> = await res.json();
-    console.log("AI 回應完整資料", json);
-    if (!json.success || !json.data) {
-      throw new Error(json.errorMessage ?? "AI 回應失敗");
+    console.log("AI 回應完整資料", reply);
+    if (!reply.success || !reply.data) {
+      throw new Error(reply.errorMessage ?? "AI 回應失敗");
     }
 
     // ✅ 將使用者訊息加入 messages（可依結構調整）
@@ -475,7 +313,7 @@ async function sendMessage() {
     });
 
     // ✅ 加入 AI 回覆內容
-    const aiContent = json.data.aiResponse.choices[0]?.message.content;
+    const aiContent = reply.data.aiResponse.choices[0]?.message.content;
     if (aiContent) {
       messages.value.push({
         role: "assistant",
@@ -493,23 +331,10 @@ async function sendMessage() {
   }
 }
 
-// function sendSuggestion(text: string) {
-//   newMessage.value = text;
-//   sendMessage();
-// }
-
-// function clearMessages() {
-//   if (!currentChatId.value) return;
-//   if (!confirm("確定要清除這個對話內容嗎？")) return;
-
-//   const chat = chatHistory.value.find(
-//     (chat) => chat.id === currentChatId.value
-//   );
-//   if (chat) {
-//     chat.messages = [];
-//     messages.value = [];
-//   }
-// }
+function sendSuggestion(text: string) {
+  newMessage.value = text;
+  sendMessage();
+}
 
 function autoResize(event: Event) {
   const textarea = event.target as HTMLTextAreaElement;
