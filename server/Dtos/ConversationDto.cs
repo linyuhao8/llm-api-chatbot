@@ -21,5 +21,9 @@ namespace Chat.Dtos
         /// 建立時間
         /// </summary>
         public DateTime CreatedAt { get; set; }
+        /// <summary>
+        /// 最後一條訊息的內容，作為預覽用
+        /// </summary>
+        public string? Preview { get; set; }
     }
 }
