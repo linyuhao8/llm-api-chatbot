@@ -4,13 +4,6 @@ export interface ChatResponse {
   errorMessage: string | null;
 }
 
-export interface ChatSummary {
-  id: number;
-  title: string;
-  createdAt: string; // ISO 格式時間
-  preview: string | null;
-}
-
 export interface ChatData {
   id: string;
   object: string;

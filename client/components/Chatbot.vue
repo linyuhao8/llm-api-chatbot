@@ -18,11 +18,12 @@
             v-for="chat in chatHistory"
             :key="chat.id"
             :class="['chat-item', { active: chat.id === currentChatId }]"
+            @click="loadChat(chat.id)"
           >
             <!-- 上方btn @click="loadChat(chat.id)" -->
             <div class="chat-item-content">
               <div class="chat-item-title">{{ chat.title }}</div>
-              <!-- <div class="chat-item-preview">{{ chat.preview }}</div> -->
+              <div class="chat-item-preview">{{ chat.preview }}</div>
             </div>
             <div class="chat-item-actions">
               <!-- 下方btn @click.stop="deleteChat(chat.id)" -->
@@ -98,21 +99,21 @@
           <div
             v-for="message in messages"
             :key="message.id"
-            :class="['message', message.type]"
+            :class="['message', message.role]"
           >
             <div class="message-wrapper">
               <div class="message-avatar">
-                {{ message.type === "user" ? "U" : "AI" }}
+                {{ message.role === "User" ? "User" : "AI" }}
               </div>
               <div class="message-content">
-                <div v-if="message.type === 'assistant' && message.isTyping">
+                <div v-if="message.role === 'Assistant' && message.isTyping">
                   {{ message.displayText
                   }}<span
-                    v-if="message.displayText !== message.text"
+                    v-if="message.displayText !== message.content"
                     class="typing-cursor"
                   ></span>
                 </div>
-                <div v-else>{{ message.text }}</div>
+                <div v-else>{{ message.content }}</div>
               </div>
             </div>
           </div>
@@ -134,7 +135,6 @@
         <div class="chat-input">
           <div class="input-container">
             <div class="input-wrapper">
-              <!-- @keydown="handleKeyDown" -->
               <textarea
                 v-model="newMessage"
                 @input="autoResize"
@@ -142,11 +142,12 @@
                 class="message-input"
                 ref="messageInput"
                 :disabled="isTyping"
+                @keydown="handleKeyDown"
               ></textarea>
-              <!-- @click="sendMessage" -->
               <button
                 :disabled="!newMessage.trim() || isTyping"
                 class="send-button"
+                @click="sendMessage"
               >
                 ↑
               </button>
@@ -165,10 +166,11 @@
 
 <script setup lang="ts">
 import "~/assets/chatbot.css";
-import { ref, reactive, onMounted, nextTick } from "vue";
-import type { ChatResponse, ChatSummary } from "~/types/chat";
-import type { ApiResponse } from "~/types/api-response";
+import { ref, onMounted, nextTick } from "vue";
+import type { ChatResponse } from "~/types/chat";
+import type { ApiResponse, AskResultData } from "~/types/api-response";
 import type { Conversation } from "~/types/conversation";
+import type { DeepSeekResponse } from "~/types/DeepSeekRespones";
 import { useRoute } from "vue-router";
 const route = useRoute();
 
@@ -325,6 +327,11 @@ onMounted(async () => {
   console.log("loadChatHistory 執行完");
   messageInput.value?.focus();
 });
+
+watch(messages, (newVal, oldVal) => {
+  console.log("🟡 messages updated:", newVal);
+});
+
 // --- 方法定義 ---
 async function loadChatHistory() {
   if (!userId.value) return;
@@ -348,22 +355,27 @@ async function loadChatHistory() {
   }
 }
 
-// async function loadChat(chatId: number) {
-//   try {
-//     const chat = await db.getChat(chatId);
-//     if (chat) {
-//       currentChatId.value = chatId;
-//       currentChatTitle.value = chat.title;
-//       messages.value = [...chat.messages];
+async function loadChat(conversationId: number) {
+  try {
+    const res = await fetch(
+      `http://localhost:5208/api/Chat/conversations/${conversationId}/messages`
+    );
 
-//       if (window.innerWidth <= 768) showSidebar.value = false;
+    const json = await res.json();
 
-//       scrollToBottom();
-//     }
-//   } catch (err) {
-//     console.error("載入聊天失敗:", err);
-//   }
-// }
+    if (json.success && json.data) {
+      currentChatId.value = json.data.id;
+      currentChatTitle.value = json.data.title;
+      messages.value = json.data.messages;
+
+      if (window.innerWidth <= 768) showSidebar.value = false;
+
+      scrollToBottom();
+    }
+  } catch (err) {
+    console.error("載入聊天失敗:", err);
+  }
+}
 
 async function createNewChat() {
   try {
@@ -418,46 +430,68 @@ async function createNewChat() {
 //   }
 // }
 
-// async function sendMessage() {
-//   if (!newMessage.value.trim() || isTyping.value) return;
+async function sendMessage() {
+  // ✅ 檢查輸入訊息是否為空或正在輸入中
+  if (!newMessage.value.trim() || isTyping.value) return;
 
-//   if (!currentChatId.value) {
-//     await createNewChat();
-//   }
+  const content = newMessage.value.trim();
+  isTyping.value = true;
+  scrollToBottom();
 
-//   const userMessage = {
-//     type: "user",
-//     text: newMessage.value.trim(),
-//     timestamp: formatTime(new Date()),
-//     isTyping: false,
-//     displayText: "",
-//   };
+  // ✅ 如果沒有 currentChatId，就創建一個新對話
+  if (!currentChatId.value) {
+    await createNewChat(); // ⚠️ 確保這個會更新 currentChatId.value
+  }
 
-//   const savedUserMessage = await db.saveMessage(
-//     currentChatId.value!,
-//     userMessage
-//   );
-//   messages.value.push(savedUserMessage);
-//   newMessage.value = "";
-//   scrollToBottom();
+  // ✅ 組合使用者訊息
+  const userMessage = {
+    role: "user", // 注意大小寫需符合後端 enum，否則可能失敗
+    content: content,
+  };
 
-//   isTyping.value = true;
+  try {
+    const res = await fetch(
+      `http://localhost:5208/api/Chat/${currentChatId.value}/ask?provider=DeepSeek`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          accept: "*/*",
+        },
+        body: JSON.stringify([userMessage]),
+      }
+    );
 
-//   setTimeout(async () => {
-//     const assistantMessage = {
-//       type: "assistant",
-//       text: generateMockResponse(savedUserMessage.text),
-//       timestamp: formatTime(new Date()),
-//     };
-//     const savedAssistantMessage = await db.saveMessage(
-//       currentChatId.value!,
-//       assistantMessage
-//     );
-//     messages.value.push(savedAssistantMessage);
-//     isTyping.value = false;
-//     scrollToBottom();
-//   }, 1000);
-// }
+    const json: ApiResponse<AskResultData> = await res.json();
+    console.log("AI 回應完整資料", json);
+    if (!json.success || !json.data) {
+      throw new Error(json.errorMessage ?? "AI 回應失敗");
+    }
+
+    // ✅ 將使用者訊息加入 messages（可依結構調整）
+    messages.value.push({
+      role: "user",
+      content: content,
+    });
+
+    // ✅ 加入 AI 回覆內容
+    const aiContent = json.data.aiResponse.choices[0]?.message.content;
+    if (aiContent) {
+      messages.value.push({
+        role: "assistant",
+        content: aiContent,
+      });
+    }
+  } catch (err) {
+    console.error("❌ 發送訊息失敗:", err);
+    // 可以加上 toast 或顯示錯誤提示給使用者
+  } finally {
+    // ✅ 重置輸入欄與狀態
+    newMessage.value = "";
+    isTyping.value = false;
+    scrollToBottom();
+  }
+}
 
 // function sendSuggestion(text: string) {
 //   newMessage.value = text;
@@ -483,12 +517,12 @@ function autoResize(event: Event) {
   textarea.style.height = textarea.scrollHeight + "px";
 }
 
-// function handleKeyDown(event: KeyboardEvent) {
-//   if (event.key === "Enter" && !event.shiftKey) {
-//     event.preventDefault();
-//     sendMessage();
-//   }
-// }
+function handleKeyDown(event: KeyboardEvent) {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    sendMessage();
+  }
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -507,16 +541,4 @@ function formatTime(date: Date) {
   const minutes = date.getMinutes().toString().padStart(2, "0");
   return `${hours}:${minutes}`;
 }
-
-// function generateMockResponse(userText: string) {
-//   const replies = [
-//     "這是一個很棒的問題，我們來深入探討一下...",
-//     "根據您的描述，我建議可以這樣做...",
-//     "讓我來幫您整理一下重點。",
-//     "這個問題其實牽涉到幾個關鍵概念，我來說明一下。",
-//     "我明白您的想法，以下是一些建議：",
-//   ];
-//   const randomIndex = Math.floor(Math.random() * replies.length);
-//   return replies[randomIndex];
-// }
 </script>
